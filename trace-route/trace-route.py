@@ -1,15 +1,37 @@
-#!/usr/bin/env python3
+#!./venv/bin/python3.10
 
-from scapy.all import IP, ICMP, sr1
+from question import Question
+import os
+from tracer import Tracer
+from validations import ip_is_valid
+from geolocation import geolocate, display_geolocation
+import argparse
 
-def ip_is_valid(ip):
-    import re
+progname = os.path.basename(__file__)
 
-    pattern = re.compile("\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}")
-    return pattern.match(ip)
+parser = argparse.ArgumentParser(
+    prog=progname,
+    description='Trace route and IP lookup',
+    epilog=f'{progname} 93.184.215.14'
+)
 
-def author():
-    print("""
+parser.add_argument('ip', help='IP to trace')
+parser.add_argument('--max-ttl', type=int, default=30, help='Set the max number of hops (max TTL reached). default is 30')
+parser.add_argument('--no-cache', action='store_true', default=False, help='Force the program to not use cache')
+parser.add_argument('-y', '--yes', action='store_true', default=False, help="Don't ask questions, just continue")
+
+args = parser.parse_args()
+
+if not ip_is_valid(args.ip):
+    print('\033[1;31m[!] Invalid IP address\033[0m')
+    exit(1)
+
+
+if os.geteuid() != 0:
+    print('\033[1;31m[!] You should run as sudo\033[0m')
+    exit(1)
+
+print("""\033[1;32m
 ████████╗██████╗  █████╗  ██████╗███████╗    ██████╗  ██████╗ ██╗   ██╗████████╗███████╗
 ╚══██╔══╝██╔══██╗██╔══██╗██╔════╝██╔════╝    ██╔══██╗██╔═══██╗██║   ██║╚══██╔══╝██╔════╝
    ██║   ██████╔╝███████║██║     █████╗      ██████╔╝██║   ██║██║   ██║   ██║   █████╗  
@@ -17,89 +39,36 @@ def author():
    ██║   ██║  ██║██║  ██║╚██████╗███████╗    ██║  ██║╚██████╔╝╚██████╔╝   ██║   ███████╗
    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝    ╚═╝  ╚═╝ ╚═════╝  ╚═════╝    ╚═╝   ╚══════╝
                                                                                         
-by @marcos-venicius, https://github.com/marcos-venicius
+\033[1;36mby @marcos-venicius, https://github.com/marcos-venicius\033[0m
 """)
 
-def params():
-    import sys
-
-    if len(sys.argv) != 2:
-        print('Usage: sudo ./trace-route.py <ip>')
-        exit(1)
-
-    if sys.argv[1] == '--help':
-        print('Usage: sudo ./trace-route.py <ip>')
-        print('[env] MAX_TTL\t\tSet the max number of hops (max TTL to be reached). Default is 30')
-        exit(0)
-
-    if not ip_is_valid(sys.argv[1]):
-        print('\033[1;31m[!] Invalid IP address\033[0m')
-        exit(1)
-
-    return sys.argv[1]
-
-def is_sudo():
-    import os
-
-    return os.geteuid() == 0
-
-def get_max_ttl():
-    import os
-
-    env = os.environ.get("MAX_TTL")
-
-    if env is None:
-        return 30
-
-    if env.isnumeric() and int(env) >= 1:
-        return int(env)
-
-    return 30
-
-
-def trace(ttl, ip):
-    ip = IP(
-        dst=ip,
-        ttl=ttl
-    )
-
-    icmp = ICMP()
-
-    return sr1(ip / icmp, verbose=False, timeout=1)
-
-if not is_sudo():
-    print('\033[1;31m[!] You should run as sudo\033[0m')
-    exit(1)
-
-ip = params()
-MAX_TTL = get_max_ttl()
-
-author()
-
 print('\033[0;36m[*] Press ctrl+c when you want to stop\033[0m\n')
-print('\033[1;37mTracing route...\033[0m\n')
 
-try:
-    found, ttl = set(), 1
+tracer = Tracer(args.no_cache, args.max_ttl, args.ip)
 
-    while True:
-        res = trace(ttl, ip)
+results = tracer.trace()
 
-        if res:
-            if res.src in found:
-                break
-            else:
-                found.add(res.src)
+print('\n\033[1;32m[+]\033[0m Tracing finished\n')
 
-            print(f'\033[1;32m[{str(ttl).ljust(3, " ")}] {res.src}\033[0m')
-        else:
-            print(f'\033[1;31m[{str(ttl).ljust(3, " ")}] *\033[0m')
+response = 'y'
 
-        if ttl >= MAX_TTL:
-            break
+if not args.yes:
+    question = Question({ 'y': 'yes', 'n': 'no' })
 
-        ttl += 1
+    response = question.ask("You want to loopkup the IP's location? ")
 
-    print('\n\033[1;37m[+] Tracing finished\033[0m\n')
-except:
+    print()
+
+if response == 'n':
+    print('Bye')
     exit(0)
+
+print('\033[1;36m[*] Looking up for geolocations\n\033[0m')
+
+for ttl, ip in results:
+    if ip:
+        result = geolocate(ip, args.no_cache)
+        print('\033[1;32m' + str(ttl).rjust(3, ' ') + ' \033[0m' + ip)
+        display_geolocation(result)
+    else:
+        print('\033[1;31m' + str(ttl).rjust(3, ' ') + ' \033[0m*')

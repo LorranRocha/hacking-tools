@@ -1,6 +1,8 @@
 # Trace Route
 
-![image](https://github.com/marcos-venicius/hacking-tools/assets/94018427/b8beebd4-977b-455d-88a5-795a5b71a06c)
+![Screenshot from 2024-05-01 07-39-05](https://github.com/marcos-venicius/hacking-tools/assets/94018427/22fb5786-2487-4408-b0f5-47a4ba47dc5a)
+
+![Screenshot from 2024-05-01 07-39-20](https://github.com/marcos-venicius/hacking-tools/assets/94018427/e106a4c7-724f-4193-9fcf-24f3cb2ffb65)
 
 Basically the concept works using the TTL parameter of the IP protocol.
 
@@ -23,16 +25,26 @@ By incrementing the TTL value one by one (starting at 1) we can keep track the r
 * This script should run as sudo
 * This script needs a parameter that is the target you want to trace the route
     * it cannot be a domain, to transform the domain in a IP you can use my [DNS Resolver tool](../dns-resolver/) that is free.
-* The default MAX_TTL(number of HOPS) is 30
+* The default MAX_TTL(number of HOPS) is 30. If you wanna change this, use the flag `--max-ttl` and pass your own value.
+* The program will cache the results by default and if has data in cache will get from there. If you don't wanna this behavior, use the flag `--no-cache`
+* You will be asked (after the route trace) if you want to lookup for the IP's geolocation, you wanna make this yes at startup time, pass the flag `--yes` to don't ask questions
 
 Example:
 
 ```bash
-sudo ./trace-route.py 10.0.0.4
+usage: trace-route.py [-h] [--max-ttl MAX_TTL] [--no-cache] [-y] ip
+
+Trace route and IP lookup
+
+positional arguments:
+  ip                 IP to trace
+
+options:
+  -h, --help         show this help message and exit
+  --max-ttl MAX_TTL  Set the max number of hops (max TTL reached). default is 30
+  --no-cache         Force the program to not use cache
+  -y, --yes          Don't ask questions, just continue
+
+trace-route.py 93.184.215.14
 ```
 
-if you wanna change the max TTL, you can use like:
-
-```bash
-sudo MAX_TTL=40 ./trace-route.py 10.0.0.4
-```
